@@ -24,7 +24,6 @@ batch_valid_data = []
 batch_valid_data_size = 0
 batch_full_data = {}
 batch_file_list = []
-epoch_cnt = 0
 init_cnt = 0
 
 
@@ -72,8 +71,6 @@ class WikiS2vBatch(Dataset):
                                 article = link.replace("_", " ")
                                 articles.update([article.lower()])
                                 cnt += 1
-                        # print(file)
-                        # break
         print('Number of input articles: '+ str(len(articles)))
         return articles
     
@@ -197,8 +194,7 @@ class WikiS2vBatch(Dataset):
                 data = pickle.load(open(self.batch_dir+file, 'rb'))
                 for title in data:
                     if len(data[title]) > self.config['doc_len']:
-                        batch_full_data[title] = data[title] # [0:self.config['doc_len']]
-                # batch_full_data.update(data)
+                        batch_full_data[title] = data[title]
             for title in batch_full_data:
                 batch_train_data.append(title)
             random.seed(init_cnt)
@@ -242,94 +238,14 @@ class WikiS2vBatch(Dataset):
             print('\t'+str(key)+'\t'+str(sim_dict[key]))
 
     def on_epoch_end(self):
-        global epoch_cnt
-        epoch_cnt+=1
-        # if epoch_cnt % 3 == 0:
         self._init_batch()
 
     def __len__(self):
         global batch_train_data, batch_valid_data
         if self.valid:
-            # return len(batch_valid_data)*10
             return int(batch_valid_data_size/2)
         else:
-            # return len(batch_train_data)*10
             return int(batch_train_data_size/10)
-
-    def __getitem__v1(self, idx):
-        global batch_train_data, batch_valid_data, links_dict, epoch_cnt
-        batch_dataset = batch_valid_data if self.valid else batch_train_data
-        if torch.is_tensor(idx):
-            idx = idx.tolist()
-
-        # if (idx == 0) and not self.valid:
-        #     epoch_cnt += 1
-        # p = epoch_cnt/20.0
-        # if p > 1.0:
-        #     p = 1.0
-        # if self.valid:
-        #     p = 1.0
-
-        input_sentence = torch.zeros((self.config['doc_len'], self.config['s2v_dim'],),
-                                        dtype=torch.float)
-        output_sentence = torch.zeros((self.config['doc_len'], 3*self.config['s2v_dim'],),
-                                      dtype=torch.float)
-        encoder_mask = torch.full((self.config['doc_len'], self.config['doc_len'],),
-                                    fill_value=float("-inf"), dtype=torch.float)
-        input_mask = torch.ones((self.config['doc_len'], self.config['s2v_dim'],),
-                                 dtype=torch.float)
-        output_mask = torch.zeros((self.config['doc_len'], 3*self.config['s2v_dim'],),
-                                  dtype=torch.float)
-
-        input_title = batch_dataset[idx]
-        sent_len = len(batch_full_data[input_title])
-        # mask_idx = random.randint(0, self.config['doc_len']-1)
-        start_sent_idx = 0
-        if not self.valid:
-            if len(batch_full_data[input_title]) > self.config['doc_len']:
-                start_sent_idx = random.randint(0, len(batch_full_data[input_title])-self.config['doc_len']-1)
-        for sent_idx, _ in enumerate(batch_full_data[input_title]):
-            sentence = batch_full_data[input_title][sent_idx+start_sent_idx]
-            sent_prev_valid = True
-            sent_next_valid = True
-
-            if (sent_idx+start_sent_idx) != 0:
-                sentence_prev = batch_full_data[input_title][sent_idx+start_sent_idx-1]
-            else:
-                sentence_prev = sentence
-                sent_prev_valid = False
-
-            if (sent_idx+start_sent_idx+1) != len(batch_full_data[input_title]):
-                sentence_next = batch_full_data[input_title][sent_idx+start_sent_idx+1]
-            else:
-                sentence_next = sentence
-                sent_next_valid = False
-
-            if sent_idx >= self.config['doc_len']:
-                break
-            rnd_sent_mask = random.random()
-            # if sent_idx == mask_idx:
-            input_mask[sent_idx] = torch.from_numpy(np.random.binomial(1, 0.5, size=self.config['s2v_dim']).astype(np.float32))
-            if rnd_sent_mask < 0.15:
-                # input_mask[sent_idx, :] = torch.tensor(0.0)
-                if sent_prev_valid:
-                    output_mask[sent_idx, :self.config['s2v_dim']] = torch.tensor(1.0)
-                output_mask[sent_idx, self.config['s2v_dim']:2*self.config['s2v_dim']] = torch.tensor(1.0)
-                if sent_next_valid:
-                    output_mask[sent_idx, 2*self.config['s2v_dim']:] = torch.tensor(1.0)
-                # output_mask[sent_idx, :] = torch.tensor(1.0)
-            input_sentence[sent_idx] = torch.from_numpy(sentence['sentence_vect_gTr'].astype(np.float32))
-            output_sentence[sent_idx] = torch.cat((
-                    torch.from_numpy(sentence_prev['sentence_vect_gTr'].astype(np.float32)),
-                    torch.from_numpy(sentence['sentence_vect_gTr'].astype(np.float32)),
-                    torch.from_numpy(sentence_next['sentence_vect_gTr'].astype(np.float32))
-                ), dim=-1)
-            encoder_mask[sent_idx, 0:sent_len] = torch.tensor(0.0)
-
-            # print(input_title+" p:" + str(sentence['paragraph_idx']) + " l:" + str(sentence['line_idx']))
-            # self._find_closest_s2v(sentence['sentence_vect_gTr'])
-
-        return (input_sentence, output_sentence, encoder_mask, input_mask, output_mask)
 
     def get_title_from_idx(self, batch_dataset):
         title_list = []
@@ -341,7 +257,7 @@ class WikiS2vBatch(Dataset):
         return rnd_title
 
     def __getitem__(self, idx):
-        global batch_train_data, batch_valid_data, links_dict, epoch_cnt
+        global batch_train_data, batch_valid_data 
         batch_dataset = batch_valid_data if self.valid else batch_train_data
         if torch.is_tensor(idx):
             idx = idx.tolist()
@@ -359,14 +275,10 @@ class WikiS2vBatch(Dataset):
         test_s2v = torch.zeros((self.config['doc_len'], self.config['s2v_dim'], ), dtype=torch.float)
         test_label = torch.zeros((self.config['doc_len'], 2, ), dtype=torch.float)
 
-        # input_title = batch_dataset[idx]
         input_title = self.get_title_from_idx(batch_dataset)
 
-        sent_len = len(batch_full_data[input_title])
         start_sent_idx = 0
         if not self.valid or True:
-            # if len(batch_full_data[input_title]) > self.config['doc_len']:
-                # start_sent_idx = random.randint(0, len(batch_full_data[input_title])-self.config['doc_len']-1)
             if len(batch_full_data[input_title]) > (self.config['doc_len']+1):
                 start_sent_idx = random.randint(0, len(batch_full_data[input_title])-self.config['doc_len']-2)
         for sent_idx, _ in enumerate(batch_full_data[input_title]):
@@ -376,23 +288,17 @@ class WikiS2vBatch(Dataset):
                 break
             sentence = batch_full_data[input_title][sent_idx+start_sent_idx]
             sentence_next = batch_full_data[input_title][sent_idx+start_sent_idx+1]
-            # if sent_idx >= self.config['doc_len']:
-            # if sent_idx == (self.config['doc_len']-1):
-            #     input_mask[sent_idx, :] = torch.tensor(0.0)
-            #     output_mask[sent_idx, :] = torch.tensor(1.0)
             rnd_mask = random.random()
             if rnd_mask < 0.10:
                 input_mask[sent_idx, :] = torch.tensor(0.0)
             input_sentence[sent_idx] = torch.from_numpy(sentence['sentence_vect_gTr'].astype(np.float32))
             output_sentence[sent_idx] = torch.from_numpy(sentence_next['sentence_vect_gTr'].astype(np.float32))
             output_mask[sent_idx, :] = torch.tensor(1.0)
-            # encoder_mask[sent_idx, 0:sent_len] = torch.tensor(0.0)
 
         for sent_idx in range(self.config['doc_len']):
             encoder_mask[sent_idx, 0:sent_idx+1] = torch.tensor(0.0)
         
         for sent_idx in range(self.config['doc_len']):
-            # rnd_test = random.choice([False, True])
             rnd_label = random.random()
             test_label[sent_idx][int(rnd_label < 0.5)] = torch.tensor(1.0)
             if (rnd_label < 0.5):
@@ -400,7 +306,7 @@ class WikiS2vBatch(Dataset):
             else:
                 rnd_title = random.random()
                 test_doc_title = input_title
-                if (rnd_title < 0.15) and (not self.valid): # TODO weigth choice
+                if (rnd_title < 0.15) and (not self.valid): # TODO weight choice
                     rnd_idx = random.randint(0, len(batch_dataset)-1)
                     test_doc_title = batch_dataset[rnd_idx]
                 rnd_sent_idx = random.randint(0, len(batch_full_data[test_doc_title])-2)
@@ -419,9 +325,8 @@ class WikiS2vBatch(Dataset):
         return (input_sentence, output_sentence, encoder_mask, input_mask, output_mask, test_s2v, test_label)
 
     def get_test_data(self, art_idx, start_sent_idx, test_sent_idx, init=False):
-        global batch_train_data, batch_valid_data, links_dict, epoch_cnt
+        global batch_train_data, batch_valid_data
         batch_dataset = batch_valid_data if self.valid else batch_train_data
-        # batch_dataset = batch_train_data
 
         input_sentence = torch.zeros((1, self.config['doc_len'], self.config['s2v_dim'],),
                                         dtype=torch.float)
@@ -440,17 +345,13 @@ class WikiS2vBatch(Dataset):
         input_title = batch_dataset[idx]
         if init:
             print("-----"+input_title+"-----")
-        sent_len = len(batch_full_data[input_title])
         for sent_idx, _ in enumerate(batch_full_data[input_title]):
             if sent_idx >= self.config['doc_len']:
                 break
             if (sent_idx+start_sent_idx+1) >= len(batch_full_data[input_title]):
                 break
             sentence = batch_full_data[input_title][sent_idx+start_sent_idx]
-            sentence_next = batch_full_data[input_title][sent_idx+start_sent_idx+1]
             input_sentence[0, sent_idx] = torch.from_numpy(sentence['sentence_vect_gTr'].astype(np.float32))
-            # output_sentence[0, sent_idx] = torch.from_numpy(sentence_next['sentence_vect_gTr'].astype(np.float32))
-            # output_mask[0, sent_idx, :] = torch.tensor(1.0)
             if init:
                 print(sentence['text'])
 
@@ -461,17 +362,12 @@ class WikiS2vBatch(Dataset):
         if (start_sent_idx + self.config['doc_len']) == test_sent_idx:
             print(".................")
         print('\t'+test_sent['text'], end='')
-        for i in range(self.config['doc_len']):
-            test_s2v[0, -1] = torch.from_numpy(test_sent['sentence_vect_gTr'].astype(np.float32))
+        test_s2v[0, -1] = torch.from_numpy(test_sent['sentence_vect_gTr'].astype(np.float32))
 
-        # print("")
-        # print(test_s2v[0])
-        # print(input_sentence[0])
-        # print("")
         return (input_sentence, output_sentence, encoder_mask, input_mask, output_mask, test_s2v, test_label)
     
     def check_accuracy(self, s2v):
-        self._find_closest_s2v(s2v.to("cpu").numpy(), "myanmar")
+        self._find_closest_s2v(s2v.to("cpu").numpy())
 
 
 def test():
