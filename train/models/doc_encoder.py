@@ -2,8 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from torch.nn.parameter import Parameter
-from torch.nn import Parameter
 
 def _get_activation_fn(activation):
     # based on https://pytorch.org/docs/stable/_modules/torch/nn/modules/transformer.html
@@ -148,10 +146,10 @@ class DocEncoder(nn.Module):
         tr_drop = config['transformer']['dropout']
 
         # input projection
+        tr_dim = 1024
         self.dense1 = DenseLayer(input_dim=s2v_dim, hidden_dim=tr_dim, output_dim=tr_dim, drop=0.5, conv=False, cat_dim=2)
 
         # self-attention network
-        tr_dim = 1024
         encoder_layer = TransformerEncoderLayer(d_model=tr_dim, nhead=nhead,
                                                 dim_feedforward=dim_feedforward, dropout=tr_drop)
         self.tr = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
