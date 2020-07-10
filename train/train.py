@@ -39,20 +39,11 @@ def train(model, device, train_loader, optimizer, epoch):
         test_s2v = torch.nn.functional.normalize(test_s2v, dim=2)
 
         # model prediction
-        # output, pred_class = model(data*in_mask, test_s2v, mask=tr_mask)
         output, pred_class = model(data, test_s2v, mask=tr_mask)
-        # pred_class = pred_class[:, 1:]
-        # test_label = test_label[:, 1:]
 
         # model training
-        # loss = F.mse_loss(output*out_mask, target*out_mask, reduction='sum')/torch.sum(out_mask)  # 3 sent out
-        # loss = F.mse_loss(output*out_mask, data*out_mask, reduction='sum')/torch.sum(out_mask) # last sent prediction
-        # loss = F.mse_loss(output*out_mask, target*out_mask, reduction='sum')/torch.sum(out_mask) # next sent prediction
         pred_loss = F.binary_cross_entropy_with_logits(pred_class, test_label, reduction='mean')
-        # pred_loss = calc_loss(pred_class, test_label)
-        # train_loss += loss.detach()
         train_loss += pred_loss.detach()
-        # loss.backward(retain_graph=True)
         pred_loss.backward(retain_graph=True)
         optimizer.step()
 
@@ -88,23 +79,12 @@ def test(model, device, test_loader, epoch):
             in_mask, out_mask = in_mask.to(device), out_mask.to(device)
             test_s2v, test_label = test_s2v.to(device), test_label.to(device)
 
-            # output, pred_class = model(data*in_mask, test_s2v, mask=tr_mask)
             data = torch.nn.functional.normalize(data, dim=2)
             target = torch.nn.functional.normalize(target, dim=2)
             test_s2v = torch.nn.functional.normalize(test_s2v, dim=2)
 
             output, pred_class = model(data, test_s2v, mask=tr_mask)
-            # pred_class = pred_class[:, 1:]
-            # test_label = test_label[:, 1:]
-            # s2v_dim = config['s2v_dim']
-            # test_mask_loss += (F.mse_loss(output[:, :, s2v_dim:2*s2v_dim]*out_mask[:, :, s2v_dim:2*s2v_dim], target[:, :, s2v_dim:2*s2v_dim]*out_mask[:, :, s2v_dim:2*s2v_dim], reduction='sum')/torch.sum(out_mask[:, :, s2v_dim:2*s2v_dim])).detach()
-            # test_prev_loss += (F.mse_loss(output[:, :, :s2v_dim]*out_mask[:, :, :s2v_dim], target[:, :, :s2v_dim]*out_mask[:, :, :s2v_dim], reduction='sum')/torch.sum(out_mask[:, :, :s2v_dim])).detach()
-            # test_next_loss += (F.mse_loss(output[:, :, 2*s2v_dim:]*out_mask[:, :, 2*s2v_dim:], target[:, :, 2*s2v_dim:]*out_mask[:, :, 2*s2v_dim:], reduction='sum')/torch.sum(out_mask[:, :, 2*s2v_dim:])).detach()
-            # test_loss += F.mse_loss(output*out_mask, target*out_mask, reduction='sum')/torch.sum(out_mask)
-            # test_loss += F.mse_loss(output*out_mask, data*out_mask, reduction='sum')/torch.sum(out_mask)
-            # test_loss += F.mse_loss(output[:, -1, :]*out_mask[:, -1, :], target[:, -1, :]*out_mask[:, -1, :], reduction='sum')/torch.sum(out_mask[:, -1, :])
             pred_loss = F.binary_cross_entropy_with_logits(pred_class, test_label, reduction='mean')
-            # pred_loss = calc_loss(pred_class, test_label)
             test_loss += pred_loss.detach()
 
             _, pred_idx = torch.max(pred_class, 2)
@@ -116,9 +96,6 @@ def test(model, device, test_loader, epoch):
     if config['training']['log']:
         writer.add_scalar('loss/test', test_loss, epoch)
         writer.add_scalar('acc/test', 100.0*correct/total, epoch)
-        # writer.add_scalar('loss/test_mask', test_mask_loss/(batch_idx+1), epoch)
-        # writer.add_scalar('loss/test_prev', test_prev_loss/(batch_idx+1), epoch)
-        # writer.add_scalar('loss/test_next', test_next_loss/(batch_idx+1), epoch)
         writer.flush()
     print('\t\tTest set: Average loss: {:.6f}'.format(test_loss))
     print('\t\tAverage acc: {:.4f}'.format(100.0*correct/total))
@@ -131,10 +108,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = DocEncoder(config)
 optimizer = optim.Adam(model.parameters(), lr=config['training']['lr'])
 print(model)
-# restore_name = '_bL16_docl7_PrClAllSnt_TrVSntSzDt10vD10Doc*SentFix_rndAll_Test.15OthDc_SrcTgt_noPosEnc_1500bFilesRndStartUpd_inDense_Tr4l16h1xhDr.1HidDim1024NormGatedNoFfn_normClasIn_Lr1e-4_save_10'
-# restore_name = '_bL16_docl7_PrClAllSnt_TrVSntSzDt10vD10Doc*SentFix_rndAll_Test.15OthDc_SrcTgt_noPosEnc_1500bFilesRndStartUpd_inDense_Tr4l16h1xhDr.1HidDim1024NormGatedNoFfn_normClasIn_Lr1e-5_resave_10'
-# restore_name = '_bL16_docl7_PrClAllSnt_TrVSntSzDt10vD10Doc*SentFix_rndAll_Test.15OthDcCloseSent.6V_SrcTgt_noPosEnc_1500bFilesRndStartUpd_inDense_Tr4l16h1xhDr.1HidDim1024NormGatedNoFfn_normClasIn_Lr1e-4_resave_10'
-# restore_name = '_bL16_docl7_PrClAllSnt_TrVSntSzDt10vD10Doc*SentFix_rndAll_Test.15OthDcCloseSent.6V_SrcTgt_noPosEnc_1500bFilesRndStartUpd_inDense_Tr4l16h1xhDr.1HidDim1024NormGatedNoFfn_normClasIn_Lr1e-4_resave2_10'
 restore_name = '_bL16_docl7_PrClAllSnt_TrVSntSzDt10vD10Doc*SentFix_rndAll_Test.15OthDc_aftClosSentTr_SrcTgt_noPosEnc_1500bFilesRndStartUpd_inDense_Tr4l16h1xhDr.1HidDim1024NormGatedNoFfn_normClasIn_Lr1e-4_resave_10'
 checkpoint = torch.load('./train/save/'+restore_name)
 model.load_state_dict(checkpoint['model_state_dict'])
